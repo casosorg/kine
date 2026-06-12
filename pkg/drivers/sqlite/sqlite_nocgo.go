@@ -70,7 +70,14 @@ func translateDSN(dsn string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "file://" + path + "?" + params, nil
+	// On Windows, filepath.Abs returns a path like C:\foo\bar. Convert to a
+	// valid file URI (file:///C:/foo/bar): use forward slashes and prepend a
+	// slash so the drive letter is not misinterpreted as a URI authority.
+	uriPath := filepath.ToSlash(path)
+	if len(uriPath) > 0 && uriPath[0] != '/' {
+		uriPath = "/" + uriPath
+	}
+	return "file://" + uriPath + "?" + params, nil
 }
 
 func version() string {
