@@ -263,11 +263,7 @@ func OpenDB(ctx context.Context, wg *sync.WaitGroup, driverName string, connecto
 
 func (d *Generic) prepare(ctx context.Context, sql *query.Named) (*query.Stmt, error) {
 	logrus.Tracef("PREPARE: %s", sql)
-	conn, err := d.DB.Conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	stmt, err := conn.PrepareContext(ctx, sql.Query)
+	stmt, err := d.DB.PrepareContext(ctx, sql.Query)
 	if err != nil {
 		return nil, err
 	}
