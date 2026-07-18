@@ -22,6 +22,7 @@ const minCompactBatchSize = 100
 
 type SQLLog struct {
 	sync.RWMutex
+	appendMu sync.Mutex
 
 	d                     server.Dialect
 	broadcaster           broadcaster.Broadcaster
@@ -644,6 +645,9 @@ func (s *SQLLog) Count(ctx context.Context, prefix, startKey string, revision in
 }
 
 func (s *SQLLog) Append(ctx context.Context, event *server.Event) (int64, error) {
+	s.appendMu.Lock()
+	defer s.appendMu.Unlock()
+
 	e := *event
 	if e.KV == nil {
 		e.KV = &server.KeyValue{}
