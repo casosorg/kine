@@ -22,6 +22,7 @@ const minCompactBatchSize = 100
 
 type SQLLog struct {
 	sync.RWMutex
+	appendMu sync.Mutex
 
 	d                     server.Dialect
 	broadcaster           broadcaster.Broadcaster
@@ -644,6 +645,9 @@ func (s *SQLLog) Count(ctx context.Context, prefix, startKey string, revision in
 }
 
 func (s *SQLLog) Append(ctx context.Context, event *server.Event) (int64, error) {
+	s.appendMu.Lock()
+	defer s.appendMu.Unlock()
+
 	e := *event
 	if e.KV == nil {
 		e.KV = &server.KeyValue{}
@@ -664,14 +668,14 @@ func (s *SQLLog) Append(ctx context.Context, event *server.Event) (int64, error)
 	if err != nil {
 		return 0, err
 	}
-	// currentRev may have moved ahead due to other inserts between when Insert returned
-	// and now; ensure that we don't roll it back if it has changed elsewhere. If the
-	// swap succeeded, notify the polling loop of the new revision.
-	if s.currentRev.CompareAndSwap(currentRev, rev) {
-		select {
-		case s.notify <- rev:
-		default:
-		}
+	// Concurrent inserts can complete after currentRev has changed. Retry until
+	// the committed revision is reflected without rolling a newer revision back.
+	for currentRev < rev && !s.currentRev.CompareAndSwap(currentRev, rev) {
+		currentRev = s.currentRev.Load()
+	}
+	select {
+	case s.notify <- rev:
+	default:
 	}
 	return rev, nil
 }
