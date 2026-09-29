@@ -94,17 +94,15 @@ type Generic struct {
 }
 
 func (d *Generic) Migrate(ctx context.Context) {
-	var (
-		count     = 0
-		countKV   = d.queryRow(ctx, query.New("SELECT COUNT(*) FROM key_value", "?", false, ""))
-		countKine = d.queryRow(ctx, query.New("SELECT COUNT(*) FROM kine", "?", false, ""))
-	)
-
-	if err := countKV.Scan(&count); err != nil || count == 0 {
+	// Run each count only when it is needed: a queried *sql.Row keeps its
+	// statement, connection and read snapshot until it is scanned, so an
+	// unscanned count would pin the SQLite WAL for the life of the process.
+	count := 0
+	if err := d.queryRow(ctx, query.New("SELECT COUNT(*) FROM key_value", "?", false, "")).Scan(&count); err != nil || count == 0 {
 		return
 	}
 
-	if err := countKine.Scan(&count); err != nil || count != 0 {
+	if err := d.queryRow(ctx, query.New("SELECT COUNT(*) FROM kine", "?", false, "")).Scan(&count); err != nil || count != 0 {
 		return
 	}
 
